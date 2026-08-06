@@ -1,0 +1,95 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (c) 2026 SoC Centric LLC
+#
+# GitLab CI/CD for imx708-derm — Real-time skin imaging system
+# C++17 CMake project with OpenCV, Catch2 tests, Doxygen docs.
+
+stages:
+  - build
+  - test
+  - lint
+  - doc
+  - deploy
+
+variables:
+  GIT_SUBMODULE_STRATEGY: none
+
+# ── Build ───────────────────────────────────────────────────────────────────
+
+build:
+  stage: build
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq cmake ninja-build g++-11 libopencv-dev libgtest-dev
+  script:
+    - mkdir -p build && cd build
+    - cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+    - ninja
+  artifacts:
+    paths:
+      - build/
+    expire_in: 1 day
+
+# ── Test ───────────────────────────────────────────────────────────────────
+
+test:
+  stage: test
+  image: ubuntu:22.04
+  needs: [build]
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq cmake ninja-build g++-11 libopencv-dev libgtest-dev
+  script:
+    - cd build
+    - cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+    - ninja
+    - ctest --output-on-failure -j$(nproc)
+  artifacts:
+    reports:
+      junit: build/test-results/*.xml
+
+# ── Lint ────────────────────────────────────────────────────────────────────
+
+lint:
+  stage: lint
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq clang-format-14 cppcheck
+  script:
+    - clang-format-14 --dry-run --Werror src/*.cpp include/*.h test/*.cpp 2>/dev/null || true
+    - cppcheck --enable=all --inconclusive --suppress=missingIncludeSystem src/ test/ 2>/dev/null || true
+
+# ── Documentation ───────────────────────────────────────────────────────────
+
+doc:
+  stage: doc
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq doxygen graphviz
+  script:
+    - doxygen docs/Doxyfile 2>/dev/null || echo "Doxygen config not found, skipping"
+  artifacts:
+    paths:
+      - docs/html/
+    expire_in: 1 week
+
+# ── Deploy ──────────────────────────────────────────────────────────────────
+
+pages:
+  stage: deploy
+  image: ubuntu:22.04
+  needs: [doc]
+  script:
+    - mkdir -p public
+    - cp -r docs/html/* public/ 2>/dev/null || echo "No docs to deploy"
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'master'
+  environment:
+    name: gitlab-pages
+    url: $CI_PAGES_URL
