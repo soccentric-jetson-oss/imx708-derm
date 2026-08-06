@@ -1,5 +1,5 @@
-build/
-*.o *.ko *.so *.a
-.*.swp .DS_Store
-__pycache__/
-*.pyc
+# SPDX-License-Identifier: GPL-2.0-only
+build/ dist/ *.o *.a *.so *.so.*
+*.swp *.swo *~ .vscode/ .idea/
+docs/html/
+.DS_Store Thumbs.db *.bak
